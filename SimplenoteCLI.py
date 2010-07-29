@@ -217,7 +217,6 @@ def read_note(key, filename, encoding='utf-8'):
     result = 0
     try:
         outfile.write(urlopen(note_url).read().decode('utf-8'))
-        # TODO: call to 'read' my not read entire stream
     except IOError, data:
         print >> sys.stderr, \
         "Failed to get note text for key %s : %s" % (data[2], key)
@@ -258,6 +257,18 @@ def create_note(filename, encoding='utf-8'):
     return result
 
 
+def delete_note(key, dead=False):
+    """ Delete note with given key"""
+    if dead is True:
+        delete_url = API_URL + "delete?key=%s&auth=%s&email=%s&dead=1" \
+                     % (key, AUTH.token, AUTH.email)
+    else:
+        delete_url = API_URL + "delete?key=%s&auth=%s&email=%s" \
+                     % (key, AUTH.token, AUTH.email)
+    urlopen(delete_url)
+    return 0
+
+
 def setup_arg_parser():
     """ Return an arg_parser, set up with all options """
     class MyIndentedHelpFormatter(IndentedHelpFormatter):
@@ -282,7 +293,7 @@ def setup_arg_parser():
                 return ""
     arg_parser = OptionParser(
         formatter=MyIndentedHelpFormatter(),
-        usage = "%prog [options] CMD [ARGS] ",
+        usage = "%prog [options] CMD ARGS",
         description = __doc__)
     arg_parser.add_option(
         '--email', action='store', dest='email',
@@ -306,6 +317,9 @@ def setup_arg_parser():
         '--encoding', action='store', dest='encoding', default='utf-8',
         help="Encoding for notes written to file or read from file "
              "(defaults to utf-8).")
+    arg_parser.add_option(
+        '--dead', action='store_true', dest='dead',
+        help="When deleting a note, delete it permanently")
     arg_parser.epilog = "You are strongly advised to use the --credfile " \
                         "option instead of the --password option. Giving " \
                         "a password in cleartext on the command line will " \
@@ -372,8 +386,18 @@ def cmd_new(options, args):
             print >> sys.stdout, "Result: %s" % key
             return 1
     except IndexError:
-        print >> sys.stderr, "read command needs KEY and FILENAME"
+        print >> sys.stderr, "new command needs FILENAME"
         return 2
+
+
+def cmd_delete(options, args):
+    """ Execute 'delete' command """
+    try:
+        key = args[2]
+    except IndexError:
+        print >> sys.stderr, "delete command needs KEY"
+        return 2
+    return delete_note(key, options.dead)
 
 
 def main(argv=None):
@@ -398,7 +422,7 @@ def main(argv=None):
         arg_parser.error("You have to specify a command. "
                          "Try '--help' for more information")
     cmd_table = { 'list': cmd_list, 'read': cmd_read, 'write': cmd_write,
-                  'search': cmd_search, 'new': cmd_new }
+                  'search': cmd_search, 'new': cmd_new, 'delete': cmd_delete }
     try:
         return cmd_table[command](options, args)
     except IndexError:
