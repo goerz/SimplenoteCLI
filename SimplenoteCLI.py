@@ -89,6 +89,8 @@ def list_notes(token, email, outfile=None, cachefile=None):
     keys_on_server = []
     last_run_date = ""
     most_recent_note_date = ""
+    if cachefile is not None and cachefile.startswith('~'):
+        cachefile = cachefile.replace('~', os.environ['HOME'], 1)
     if cachefile is not None and os.path.isfile(str(cachefile)):
         picklefh = open(cachefile, 'r')
         note_data = pickle.load(picklefh)
@@ -254,8 +256,8 @@ def main(argv=None):
              "password (second line). Defaults to ~/.simplenotesyncrc")
     arg_parser.add_option(
         '--cachefile', action='store', dest='cachefile',
-        default=os.path.join(os.environ['HOME'], '.SimplenoteCLI.cache'),
-        help="File in which to cache information about notes.")
+        help="File in which to cache information about notes. "
+             "Using a cachefile can dramatically speed up listing notes.")
     arg_parser.add_option(
         '--results', action='store', dest='results', type="int", default=10,
         help="Maximum number of results to be returned in a search")
