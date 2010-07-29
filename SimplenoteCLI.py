@@ -214,9 +214,8 @@ def write_note(token, email, key, filename):
     infile.close()
     return result
 
-
-def main(argv=None):
-    """ Main program: Select and run command"""
+def setup_arg_parser():
+    """ Return an arg_parser, set up with all options """
     class MyIndentedHelpFormatter(IndentedHelpFormatter):
         """ Slightly modified formatter for help output: allow paragraphs """
         def format_paragraphs(self, text):
@@ -237,8 +236,6 @@ def main(argv=None):
                 return "\n" + self.format_paragraphs(epilog) + "\n"
             else:
                 return ""
-    if argv is None:
-        argv = sys.argv
     arg_parser = OptionParser(
         formatter=MyIndentedHelpFormatter(),
         usage = "%prog [options] CMD [ARGS] ",
@@ -266,7 +263,14 @@ def main(argv=None):
                         "a password in cleartext on the command line will " \
                         "result in that password being visible in the "\
                         "process list and your history file."
+    return arg_parser
 
+
+def main(argv=None):
+    """ Main program: Select and run command"""
+    if argv is None:
+        argv = sys.argv
+    arg_parser = setup_arg_parser()
     options, args = arg_parser.parse_args(argv)
     if os.path.isfile(options.credfile):
         credfile = open(options.credfile)
@@ -284,35 +288,36 @@ def main(argv=None):
     except IndexError:
         arg_parser.error("You have to specify a command. "
                          "Try '--help' for more information")
+    exit_code = 0
     if command == 'list':
         if len(args) > 2:
-            return list_notes(token, options.email, outfile=args[2],
-                              cachefile=options.cachefile)
+            exit_code = list_notes(token, options.email, outfile=args[2],
+                                   cachefile=options.cachefile)
         else:
-            return list_notes(token, options.email,
-                              cachefile=options.cachefile)
+            exit_code = list_notes(token, options.email,
+                                   cachefile=options.cachefile)
     elif command == 'read':
         try:
             key = args[2]
             filename = args[3]
-            return read_note(token, options.email, key, filename)
+            exit_code = read_note(token, options.email, key, filename)
         except IndexError:
             arg_parser.error("read command needs KEY and FILENAME")
     elif command == 'write':
         try:
             key = args[2]
             filename = args[3]
-            return write_note(token, options.email, key, filename)
+            exit_code = write_note(token, options.email, key, filename)
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
     elif command == 'search':
         try:
             searchterm = args[2]
             if len(args) > 3:
-                return search_notes(token, options.email, searchterm,
+                exit_code = search_notes(token, options.email, searchterm,
                                   options.results, outfile=args[3], ascii=False)
             else:
-                return search_notes(token, options.email, searchterm,
+                exit_code = search_notes(token, options.email, searchterm,
                                       options.results, outfile=None, ascii=True)
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
@@ -320,7 +325,7 @@ def main(argv=None):
         arg_parser.error("Unknown command: %s.\n" % command +
                          "Try '--help' for more information")
 
-    return 0
+    return exit_code
 
 if __name__ == "__main__":
     sys.exit(main())
