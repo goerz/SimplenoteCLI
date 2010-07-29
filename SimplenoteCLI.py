@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 """
-Executes given CMD, where CMD is one of the following, along with 
+Executes given CMD, where CMD is one of the following, along with
 correspondings ARGS:
 
-list [FILENAME]               -  write list of all notes to FILENAME 
+list [FILENAME]               -  write list of all notes to FILENAME
                                  (or print to stdout if FILENAME not given)
-search SEARCHTERM  [FILENAME] -  write list of notes matching SEARCHTERM to 
-                                 FILENAME (or print to stdout if FILENAME 
+search SEARCHTERM  [FILENAME] -  write list of notes matching SEARCHTERM to
+                                 FILENAME (or print to stdout if FILENAME
                                  not given)
-read KEY FILENAME             -  store note with KEY in FILENAME 
+read KEY FILENAME             -  store note with KEY in FILENAME
 write KEY FILENAME            -  update note with KEY with data from FILENAME
 new FILENAME                  -  create new note from FILENAME
 delete KEY                    -  delete note with KEY"""
@@ -18,7 +18,7 @@ import os
 import codecs
 import cPickle as pickle
 from optparse import OptionParser
-from optparse import IndentedHelpFormatter 
+from optparse import IndentedHelpFormatter
 from urllib import urlopen
 from base64 import b64encode
 try:
@@ -27,7 +27,8 @@ try:
 except ImportError:
     print >> sys.stderr, "Please install the simplejson module from " \
                          "http://code.google.com/p/simplejson/"
-    sys.exit(1)
+    if __name__ == "__main__":
+        sys.exit(1)
 
 API_URL = 'https://simple-note.appspot.com/api/'
 
@@ -81,7 +82,7 @@ def list_notes(token, email, outfile=None, cachefile=None):
     except IOError, data:
         print >> sys.stderr, \
         "Failed to get list of notes from server:", data[2]
-        return
+        return 1
 
     json_note_list = simplejson.load(index)
     note_data = {}
@@ -94,7 +95,7 @@ def list_notes(token, email, outfile=None, cachefile=None):
         picklefh.close()
         last_run_date = note_data['last_run_date']
         del note_data['last_run_date']
-    
+
     if (outfile is None):
         ascii = True
         out = sys.stdout
@@ -108,11 +109,11 @@ def list_notes(token, email, outfile=None, cachefile=None):
             keys_on_server.append(key)
             if note['modify'] > most_recent_note_date:
                 most_recent_note_date = note['modify']
-            if ( note['modify'] >= last_run_date 
+            if ( note['modify'] >= last_run_date
             or key not in note_data.keys() ):
                 try:
                     note_data[key] = {
-                    'modify':note['modify'], 
+                    'modify':note['modify'],
                     'title': get_title_line(key, token, email, ascii)}
                 except IOError, data:
                     print >> sys.stderr, \
@@ -136,7 +137,10 @@ def list_notes(token, email, outfile=None, cachefile=None):
     if (outfile is not None):
         out.close()
 
-def search_notes(token, email, searchterm, results=10, outfile=None, 
+    return 0
+
+
+def search_notes(token, email, searchterm, results=10, outfile=None,
                  ascii=True):
     """ Search in Notes """
 
@@ -147,7 +151,7 @@ def search_notes(token, email, searchterm, results=10, outfile=None,
     except IOError, data:
         print >> sys.stderr, \
         "Failed to search in notes on server:", data[2]
-        return
+        return 1
 
     if (outfile is None):
         ascii = True
@@ -161,7 +165,7 @@ def search_notes(token, email, searchterm, results=10, outfile=None,
     except JSONDecodeError:
         print >> sys.stderr, \
         "Failed to decode search response. Malformed searchterm?"
-        sys.exit(1)
+        return 1
 
     for note in json_note_list['Response']['Results']:
         note_content = note['content'].replace("\n", " | ", 1)
@@ -175,30 +179,38 @@ def search_notes(token, email, searchterm, results=10, outfile=None,
     if (outfile is not None):
         out.close()
 
+    return 0
+
 
 def read_note(token, email, key, filename):
     """ Read note with given key from the server and store it in filename """
     note_url = API_URL + "note?key=%s&auth=%s&email=%s" % (key, token, email)
     outfile = codecs.open(filename, "w", "utf-8")
-    try: 
+    result = 0
+    try:
         outfile.write(urlopen(note_url).read().decode('utf-8'))
         # TODO: call to 'read' my not read entire stream
     except IOError, data:
         print >> sys.stderr, \
         "Failed to get note text for key %s : %s" % (data[2], key)
+        result = 1
     outfile.close()
+    return result
 
 
 def write_note(token, email, key, filename):
     """ Update note with given key with text stored in filename """
     note_url = API_URL + "note?key=%s&auth=%s&email=%s" % (key, token, email)
     infile = codecs.open(filename, "r", "utf-8")
-    try: 
+    result = 0
+    try:
         urlopen( note_url, b64encode(infile.read().decode("utf-8")) )
     except IOError, data:
         print >> sys.stderr, \
         "Failed to set note text for key %s : %s" % (data[2], key)
+        result = 1
     infile.close()
+    return result
 
 
 def main(argv=None):
@@ -266,38 +278,38 @@ def main(argv=None):
         arg_parser.error("You have to specify a command.")
     if command == 'list':
         if len(args) > 2:
-            list_notes(token, options.email, outfile=args[2], 
-                       cachefile=options.cachefile)
+            return list_notes(token, options.email, outfile=args[2],
+                              cachefile=options.cachefile)
         else:
-            list_notes(token, options.email, cachefile=options.cachefile)
+            return list_notes(token, options.email,
+                              cachefile=options.cachefile)
     elif command == 'read':
         try:
             key = args[2]
             filename = args[3]
-            read_note(token, options.email, key, filename)
+            return read_note(token, options.email, key, filename)
         except IndexError:
             arg_parser.error("read command needs KEY and FILENAME")
     elif command == 'write':
         try:
             key = args[2]
             filename = args[3]
-            write_note(token, options.email, key, filename)
+            return write_note(token, options.email, key, filename)
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
     elif command == 'search':
         try:
             searchterm = args[2]
             if len(args) > 3:
-                search_notes(token, options.email, searchterm, options.results, 
-                             outfile=args[3], ascii=False)
+                return search_notes(token, options.email, searchterm,
+                                  options.results, outfile=args[3], ascii=False)
             else:
-                search_notes(token, options.email, searchterm, options.results, 
-                             outfile=None, ascii=True)
+                return search_notes(token, options.email, searchterm,
+                                      options.results, outfile=None, ascii=True)
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
     else:
         arg_parser.error("Unknown command: %s" % command)
-
 
     return 0
 
