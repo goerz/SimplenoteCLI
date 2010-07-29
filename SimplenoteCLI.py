@@ -107,7 +107,7 @@ def get_note_list():
         return None
 
 
-def list_notes(outfile=None, cachefile=None):
+def list_notes(outfile=None, cachefile=None, encoding='utf-8'):
     """ print a list of all notes, ordered by recent change """
 
     note_data = {}
@@ -128,7 +128,7 @@ def list_notes(outfile=None, cachefile=None):
         out = sys.stdout
     else:
         ascii = False
-        out = codecs.open(outfile, "w", "utf-8")
+        out = codecs.open(outfile, "w", encoding)
 
     for note in get_note_list():
         if note['deleted'] is False:
@@ -167,7 +167,8 @@ def list_notes(outfile=None, cachefile=None):
     return 0
 
 
-def search_notes(searchterm, results=10, outfile=None, ascii=True):
+def search_notes(searchterm, results=10, outfile=None, ascii=True,
+                 encoding='utf-8'):
     """ Search in Notes """
 
     index_url = API_URL + 'search?query=%s&results=%s&auth=%s&email=%s' \
@@ -184,7 +185,7 @@ def search_notes(searchterm, results=10, outfile=None, ascii=True):
         out = sys.stdout
     else:
         ascii = False
-        out = codecs.open(outfile, "w", "utf-8")
+        out = codecs.open(outfile, "w", encoding)
 
     try:
         json_note_list = simplejson.load(index)
@@ -208,11 +209,11 @@ def search_notes(searchterm, results=10, outfile=None, ascii=True):
     return 0
 
 
-def read_note(key, filename):
+def read_note(key, filename, encoding='utf-8'):
     """ Read note with given key from the server and store it in filename """
     note_url = API_URL + "note?key=%s&auth=%s&email=%s" \
                % (key, AUTH.token, AUTH.email)
-    outfile = codecs.open(filename, "w", "utf-8")
+    outfile = codecs.open(filename, "w", encoding)
     result = 0
     try:
         outfile.write(urlopen(note_url).read().decode('utf-8'))
@@ -225,11 +226,11 @@ def read_note(key, filename):
     return result
 
 
-def write_note(key, filename):
+def write_note(key, filename, encoding='utf-8'):
     """ Update note with given key with text stored in filename """
     note_url = API_URL + "note?key=%s&auth=%s&email=%s" \
                % (key, AUTH.token, AUTH.email)
-    infile = codecs.open(filename, "r", "utf-8")
+    infile = codecs.open(filename, "r", encoding)
     result = 0
     try:
         result = urlopen( note_url,
@@ -241,10 +242,10 @@ def write_note(key, filename):
     return result
 
 
-def create_note(filename):
+def create_note(filename, encoding='utf-8'):
     """ Create a new note from text stored in filename  Return key."""
     note_url = API_URL + "note?auth=%s&email=%s" % (AUTH.token, AUTH.email)
-    infile = codecs.open(filename, "r", "utf-8")
+    infile = codecs.open(filename, "r", encoding)
     result = ""
     try:
         result = urlopen( note_url,
@@ -301,6 +302,10 @@ def setup_arg_parser():
     arg_parser.add_option(
         '--results', action='store', dest='results', type="int", default=10,
         help="Maximum number of results to be returned in a search")
+    arg_parser.add_option(
+        '--encoding', action='store', dest='encoding', default='utf-8',
+        help="Encoding for notes written to file or read from file "
+             "(defaults to utf-8).")
     arg_parser.epilog = "You are strongly advised to use the --credfile " \
                         "option instead of the --password option. Giving " \
                         "a password in cleartext on the command line will " \
@@ -312,7 +317,8 @@ def setup_arg_parser():
 def cmd_list(options, args):
     """ Execute 'list' command """
     if len(args) > 2:
-        return list_notes(outfile=args[2], cachefile=options.cachefile)
+        return list_notes(outfile=args[2], cachefile=options.cachefile,
+                          encoding=options.encoding)
     else:
         return list_notes(cachefile=options.cachefile)
 
@@ -322,7 +328,7 @@ def cmd_read(options, args):
     try:
         key = args[2]
         filename = args[3]
-        return read_note(key, filename)
+        return read_note(key, filename, options.encoding)
     except IndexError:
         print >> sys.stderr, "read command needs KEY and FILENAME"
         return 2
@@ -333,7 +339,7 @@ def cmd_write(options, args):
     try:
         key = args[2]
         filename = args[3]
-        return write_note(key, filename)
+        return write_note(key, filename, options.encoding)
     except IndexError:
         print >> sys.stderr, "write command needs KEY and FILENAME"
         return 2
@@ -344,11 +350,11 @@ def cmd_search(options, args):
     try:
         searchterm = args[2]
         if len(args) > 3:
-            return search_notes(searchterm, options.results,
-                                outfile=args[3], ascii=False)
+            return search_notes(searchterm, options.results, outfile=args[3],
+                                ascii=False, encoding=options.encoding)
         else:
-            return search_notes(searchterm, options.results,
-                                outfile=None, ascii=True)
+            return search_notes(searchterm, options.results, outfile=None,
+                                ascii=True, encoding=options.encoding)
     except IndexError:
         print >> sys.stderr, "write command needs KEY and FILENAME"
         return 2
@@ -358,7 +364,7 @@ def cmd_new(options, args):
     """ Execute 'new' command """
     try:
         filename = args[2]
-        key = create_note(filename)
+        key = create_note(filename, options.encoding)
         if isinstance(key, basestring) and len(key) == 38:
             print key
             return 0
