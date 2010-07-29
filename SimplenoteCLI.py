@@ -91,18 +91,25 @@ def get_title_line(key, ascii=True):
     return title
 
 
-def list_notes(outfile=None, cachefile=None):
-    """ print a list of all notes, ordered by recent change """
-
+def get_note_list():
+    """Get data-structure containing index of all notes """
     index_url = API_URL + 'index?auth=%s&email=%s' % (AUTH.token, AUTH.email)
     try:
         index = urlopen(index_url)
     except IOError, data:
         print >> sys.stderr, \
         "Failed to get list of notes from server:", data[2]
-        return 1
+        return None
+    try:
+        return simplejson.load(index)
+    except JSONDecodeError:
+        print >> sys.stderr, "Failed to decode index"
+        return None
 
-    json_note_list = simplejson.load(index)
+
+def list_notes(outfile=None, cachefile=None):
+    """ print a list of all notes, ordered by recent change """
+
     note_data = {}
     keys_on_server = []
     last_run_date = ""
@@ -123,7 +130,7 @@ def list_notes(outfile=None, cachefile=None):
         ascii = False
         out = codecs.open(outfile, "w", "utf-8")
 
-    for note in json_note_list:
+    for note in get_note_list():
         if note['deleted'] is False:
             key = note['key']
             keys_on_server.append(key)
@@ -134,7 +141,7 @@ def list_notes(outfile=None, cachefile=None):
                 try:
                     note_data[key] = {
                     'modify':note['modify'],
-                    'title': get_title_line(key, AUTH.token, AUTH.email, ascii)}
+                    'title': get_title_line(key, ascii)}
                 except IOError, data:
                     print >> sys.stderr, \
                     "Failed to get note title for key %s : %s" % (data[2], key)
