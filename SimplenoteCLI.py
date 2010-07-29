@@ -3,13 +3,15 @@
 Executes given CMD, where CMD is one of the following, along with 
 correspondings ARGS:
 
-list [FILENAME]     -  write list of all notes to FILENAME 
-                       (or print to stdout if FILENAME not given)
-search SEARCHTERM   -  like "list", but filter for SEARCHTERM
-read KEY FILENAME   -  store note with KEY in FILENAME 
-write KEY FILENAME  -  update note with KEY with data from FILENAME
-new FILENAME        -  create new note from FILENAME
-delete KEY          -  delete note with KEY"""
+list [FILENAME]               -  write list of all notes to FILENAME 
+                                 (or print to stdout if FILENAME not given)
+search SEARCHTERM  [FILENAME] -  write list of notes matching SEARCHTERM to 
+                                 FILENAME (or print to stdout if FILENAME 
+                                 not given)
+read KEY FILENAME             -  store note with KEY in FILENAME 
+write KEY FILENAME            -  update note with KEY with data from FILENAME
+new FILENAME                  -  create new note from FILENAME
+delete KEY                    -  delete note with KEY"""
 
 import sys
 import os
@@ -21,6 +23,7 @@ from urllib import urlopen
 from base64 import b64encode
 try:
     import simplejson
+    from simplejson.decoder import JSONDecodeError
 except ImportError:
     print >> sys.stderr, "Please install the simplejson module from " \
                          "http://code.google.com/p/simplejson/"
@@ -133,6 +136,45 @@ def list_notes(token, email, outfile=None, cachefile=None):
     if (outfile is not None):
         out.close()
 
+def search_notes(token, email, searchterm, results=10, outfile=None, 
+                 ascii=True):
+    """ Search in Notes """
+
+    index_url = API_URL + 'search?query=%s&results=%s&auth=%s&email=%s' \
+                           % (searchterm, results, token, email)
+    try:
+        index = urlopen(index_url)
+    except IOError, data:
+        print >> sys.stderr, \
+        "Failed to search in notes on server:", data[2]
+        return
+
+    if (outfile is None):
+        ascii = True
+        out = sys.stdout
+    else:
+        ascii = False
+        out = codecs.open(outfile, "w", "utf-8")
+
+    try:
+        json_note_list = simplejson.load(index)
+    except JSONDecodeError:
+        print >> sys.stderr, \
+        "Failed to decode search response. Malformed searchterm?"
+        sys.exit(1)
+
+    for note in json_note_list['Response']['Results']:
+        note_content = note['content'].replace("\n", " | ", 1)
+        title = note_content.replace("\n", "")[:80]
+        if ascii:
+            title = title.encode('ascii', 'ignore')
+        if len(title) < 80:
+            title = title + " "*(80-len(title))
+        print >> out, "%s (%s)" % (title, note['key'])
+
+    if (outfile is not None):
+        out.close()
+
 
 def read_note(token, email, key, filename):
     """ Read note with given key from the server and store it in filename """
@@ -202,6 +244,9 @@ def main(argv=None):
         '--cachefile', action='store', dest='cachefile',
         default=os.path.join(os.environ['HOME'], '.SimplenoteCLI.cache'),
         help="File in which to cache information about notes")
+    arg_parser.add_option(
+        '--results', action='store', dest='results', type="int", default=10,
+        help="Maximum number of results to be returned in a search")
     options, args = arg_parser.parse_args(argv)
 
     if os.path.isfile(options.credfile):
@@ -237,6 +282,17 @@ def main(argv=None):
             key = args[2]
             filename = args[3]
             write_note(token, options.email, key, filename)
+        except IndexError:
+            arg_parser.error("write command needs KEY and FILENAME")
+    elif command == 'search':
+        try:
+            searchterm = args[2]
+            if len(args) > 3:
+                search_notes(token, options.email, searchterm, options.results, 
+                             outfile=args[3], ascii=False)
+            else:
+                search_notes(token, options.email, searchterm, options.results, 
+                             outfile=None, ascii=True)
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
     else:
