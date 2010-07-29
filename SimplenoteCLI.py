@@ -206,13 +206,30 @@ def write_note(token, email, key, filename):
     infile = codecs.open(filename, "r", "utf-8")
     result = 0
     try:
-        urlopen( note_url, b64encode(infile.read().decode("utf-8")) )
+        result = urlopen( note_url, 
+                            b64encode(infile.read().decode("utf-8")) ).read()
     except IOError, data:
         print >> sys.stderr, \
         "Failed to set note text for key %s : %s" % (data[2], key)
-        result = 1
     infile.close()
     return result
+
+
+def create_note(token, email, filename):
+    """ Create a new note from text stored in filename  Return key."""
+    note_url = API_URL + "note?auth=%s&email=%s" % (token, email)
+    infile = codecs.open(filename, "r", "utf-8")
+    result = ""
+    try:
+        result = urlopen( note_url, 
+                          b64encode(infile.read().decode("utf-8")) ).read()
+    except IOError, data:
+        print >> sys.stderr, \
+        "Failed to create note text for key %s : %s" % (data[2])
+        result = ""
+    infile.close()
+    return result
+
 
 def setup_arg_parser():
     """ Return an arg_parser, set up with all options """
@@ -321,6 +338,18 @@ def main(argv=None):
                                       options.results, outfile=None, ascii=True)
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
+    elif command == 'new':
+        try:
+            filename = args[2]
+            key = create_note(token, options.email, filename)
+            if isinstance(key, basestring) and len(key) == 38:
+                print key
+                exit_code = 0
+            else:
+                print >> sys.stdout, "Result: %s" % key
+                exit_code = 1
+        except IndexError:
+            arg_parser.error("read command needs KEY and FILENAME")
     else:
         arg_parser.error("Unknown command: %s.\n" % command +
                          "Try '--help' for more information")
