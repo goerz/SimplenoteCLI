@@ -246,21 +246,26 @@ def main(argv=None):
         help="Email address to use for authentification")
     arg_parser.add_option(
         '--password', action='store', dest='password',
-        help="Password to use for authentification")
+        help="Password to use for authentification (Read warning below).")
     arg_parser.add_option(
         '--credfile', action='store', dest='credfile',
         default=os.path.join(os.environ['HOME'], '.simplenotesyncrc'),
         help="File from which to read email (first line) and "
-             "password (second line)")
+             "password (second line). Defaults to ~/.simplenotesyncrc")
     arg_parser.add_option(
         '--cachefile', action='store', dest='cachefile',
         default=os.path.join(os.environ['HOME'], '.SimplenoteCLI.cache'),
-        help="File in which to cache information about notes")
+        help="File in which to cache information about notes.")
     arg_parser.add_option(
         '--results', action='store', dest='results', type="int", default=10,
         help="Maximum number of results to be returned in a search")
-    options, args = arg_parser.parse_args(argv)
+    arg_parser.epilog = "You are strongly advised to use the --credfile " \
+                        "option instead of the --password option. Giving " \
+                        "a password in cleartext on the command line will " \
+                        "result in that password being visible in the "\
+                        "process list and your history file."
 
+    options, args = arg_parser.parse_args(argv)
     if os.path.isfile(options.credfile):
         credfile = open(options.credfile)
         if options.email is None:
@@ -275,7 +280,8 @@ def main(argv=None):
     try:
         command = args[1].lower()
     except IndexError:
-        arg_parser.error("You have to specify a command.")
+        arg_parser.error("You have to specify a command. "
+                         "Try '--help' for more information")
     if command == 'list':
         if len(args) > 2:
             return list_notes(token, options.email, outfile=args[2],
@@ -309,7 +315,8 @@ def main(argv=None):
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
     else:
-        arg_parser.error("Unknown command: %s" % command)
+        arg_parser.error("Unknown command: %s.\n" % command +
+                         "Try '--help' for more information")
 
     return 0
 
