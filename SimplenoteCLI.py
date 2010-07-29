@@ -32,22 +32,40 @@ except ImportError:
 
 API_URL = 'https://simple-note.appspot.com/api/'
 
+class SimpleNoteAuthenticator:
+    """ Class for handling authentication with Simplenote Account """
+    def __init__(self):
+        """ Define class fields """
+        self.email = ''
+        self.token = ''
+        self.token_file = ''
+    def del_token_file(self):
+        """ Remove TOKEN_FILE """
+        if os.path.isfile(self.token_file):
+            try:
+                os.remove(self.token_file)
+            except OSError, data:
+                print >> sys.stderr, "Could not remove tokenfile: %s" % data[1]
+    def init_token(self, email, password):
+        """ Set and return an authentification token """
+        login_url = API_URL + 'login'
+        creds = b64encode('email=%s&password=%s' % (email, password))
+        login = urlopen(login_url, creds)
+        self.token = login.readline().rstrip()
+        if self.token == '':
+            print >> sys.stderr, "Could not get token"
+        self.email = email
+        login.close()
 
-def get_token(email, password):
-    """ Return an authentification token """
-    login_url = API_URL + 'login'
-    creds = b64encode('email=%s&password=%s' % (email, password))
-    login = urlopen(login_url, creds)
-    token = login.readline().rstrip()
-    login.close()
-    return token
+AUTH = SimpleNoteAuthenticator()
 
 
-def get_title_line(key, token, email, ascii=True):
+def get_title_line(key, ascii=True):
     """ Get a line of length 80, consisting of the title of the note
         Do not handle IOError exceptions
     """
-    note_url = API_URL + "note?key=%s&auth=%s&email=%s" % (key, token, email)
+    note_url = API_URL + "note?key=%s&auth=%s&email=%s" \
+               % (key, AUTH.token, AUTH.email)
     note_bytes = urlopen(note_url)
     title = note_bytes.readline().decode('utf-8').rstrip()
     if len(title) >= 76:
@@ -73,10 +91,10 @@ def get_title_line(key, token, email, ascii=True):
     return title
 
 
-def list_notes(token, email, outfile=None, cachefile=None):
+def list_notes(outfile=None, cachefile=None):
     """ print a list of all notes, ordered by recent change """
 
-    index_url = API_URL + 'index?auth=%s&email=%s' % (token, email)
+    index_url = API_URL + 'index?auth=%s&email=%s' % (AUTH.token, AUTH.email)
     try:
         index = urlopen(index_url)
     except IOError, data:
@@ -116,7 +134,7 @@ def list_notes(token, email, outfile=None, cachefile=None):
                 try:
                     note_data[key] = {
                     'modify':note['modify'],
-                    'title': get_title_line(key, token, email, ascii)}
+                    'title': get_title_line(key, AUTH.token, AUTH.email, ascii)}
                 except IOError, data:
                     print >> sys.stderr, \
                     "Failed to get note title for key %s : %s" % (data[2], key)
@@ -142,12 +160,11 @@ def list_notes(token, email, outfile=None, cachefile=None):
     return 0
 
 
-def search_notes(token, email, searchterm, results=10, outfile=None,
-                 ascii=True):
+def search_notes(searchterm, results=10, outfile=None, ascii=True):
     """ Search in Notes """
 
     index_url = API_URL + 'search?query=%s&results=%s&auth=%s&email=%s' \
-                           % (searchterm, results, token, email)
+                           % (searchterm, results, AUTH.token, AUTH.email)
     try:
         index = urlopen(index_url)
     except IOError, data:
@@ -184,9 +201,10 @@ def search_notes(token, email, searchterm, results=10, outfile=None,
     return 0
 
 
-def read_note(token, email, key, filename):
+def read_note(key, filename):
     """ Read note with given key from the server and store it in filename """
-    note_url = API_URL + "note?key=%s&auth=%s&email=%s" % (key, token, email)
+    note_url = API_URL + "note?key=%s&auth=%s&email=%s" \
+               % (key, AUTH.token, AUTH.email)
     outfile = codecs.open(filename, "w", "utf-8")
     result = 0
     try:
@@ -200,13 +218,14 @@ def read_note(token, email, key, filename):
     return result
 
 
-def write_note(token, email, key, filename):
+def write_note(key, filename):
     """ Update note with given key with text stored in filename """
-    note_url = API_URL + "note?key=%s&auth=%s&email=%s" % (key, token, email)
+    note_url = API_URL + "note?key=%s&auth=%s&email=%s" \
+               % (key, AUTH.token, AUTH.email)
     infile = codecs.open(filename, "r", "utf-8")
     result = 0
     try:
-        result = urlopen( note_url, 
+        result = urlopen( note_url,
                             b64encode(infile.read().decode("utf-8")) ).read()
     except IOError, data:
         print >> sys.stderr, \
@@ -215,13 +234,13 @@ def write_note(token, email, key, filename):
     return result
 
 
-def create_note(token, email, filename):
+def create_note(filename):
     """ Create a new note from text stored in filename  Return key."""
-    note_url = API_URL + "note?auth=%s&email=%s" % (token, email)
+    note_url = API_URL + "note?auth=%s&email=%s" % (AUTH.token, AUTH.email)
     infile = codecs.open(filename, "r", "utf-8")
     result = ""
     try:
-        result = urlopen( note_url, 
+        result = urlopen( note_url,
                           b64encode(infile.read().decode("utf-8")) ).read()
     except IOError, data:
         print >> sys.stderr, \
@@ -298,7 +317,7 @@ def main(argv=None):
             password = credfile.readline().strip()
             options.password = password
         credfile.close()
-    token = get_token(options.email, options.password)
+    AUTH.init_token(options.email, options.password)
 
     try:
         command = args[1].lower()
@@ -308,40 +327,39 @@ def main(argv=None):
     exit_code = 0
     if command == 'list':
         if len(args) > 2:
-            exit_code = list_notes(token, options.email, outfile=args[2],
+            exit_code = list_notes(outfile=args[2],
                                    cachefile=options.cachefile)
         else:
-            exit_code = list_notes(token, options.email,
-                                   cachefile=options.cachefile)
+            exit_code = list_notes(cachefile=options.cachefile)
     elif command == 'read':
         try:
             key = args[2]
             filename = args[3]
-            exit_code = read_note(token, options.email, key, filename)
+            exit_code = read_note(key, filename)
         except IndexError:
             arg_parser.error("read command needs KEY and FILENAME")
     elif command == 'write':
         try:
             key = args[2]
             filename = args[3]
-            exit_code = write_note(token, options.email, key, filename)
+            exit_code = write_note(key, filename)
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
     elif command == 'search':
         try:
             searchterm = args[2]
             if len(args) > 3:
-                exit_code = search_notes(token, options.email, searchterm,
-                                  options.results, outfile=args[3], ascii=False)
+                exit_code = search_notes(searchterm, options.results,
+                                         outfile=args[3], ascii=False)
             else:
-                exit_code = search_notes(token, options.email, searchterm,
-                                      options.results, outfile=None, ascii=True)
+                exit_code = search_notes(searchterm, options.results,
+                                         outfile=None, ascii=True)
         except IndexError:
             arg_parser.error("write command needs KEY and FILENAME")
     elif command == 'new':
         try:
             filename = args[2]
-            key = create_note(token, options.email, filename)
+            key = create_note(filename)
             if isinstance(key, basestring) and len(key) == 38:
                 print key
                 exit_code = 0
