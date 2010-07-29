@@ -309,6 +309,67 @@ def setup_arg_parser():
     return arg_parser
 
 
+def cmd_list(options, args):
+    """ Execute 'list' command """
+    if len(args) > 2:
+        return list_notes(outfile=args[2], cachefile=options.cachefile)
+    else:
+        return list_notes(cachefile=options.cachefile)
+
+
+def cmd_read(options, args):
+    """ Execute 'read' command """
+    try:
+        key = args[2]
+        filename = args[3]
+        return read_note(key, filename)
+    except IndexError:
+        print >> sys.stderr, "read command needs KEY and FILENAME"
+        return 2
+
+
+def cmd_write(options, args):
+    """ Execute 'write' command """
+    try:
+        key = args[2]
+        filename = args[3]
+        return write_note(key, filename)
+    except IndexError:
+        print >> sys.stderr, "write command needs KEY and FILENAME"
+        return 2
+
+
+def cmd_search(options, args):
+    """ Execute 'search' command """
+    try:
+        searchterm = args[2]
+        if len(args) > 3:
+            return search_notes(searchterm, options.results,
+                                outfile=args[3], ascii=False)
+        else:
+            return search_notes(searchterm, options.results,
+                                outfile=None, ascii=True)
+    except IndexError:
+        print >> sys.stderr, "write command needs KEY and FILENAME"
+        return 2
+
+
+def cmd_new(options, args):
+    """ Execute 'new' command """
+    try:
+        filename = args[2]
+        key = create_note(filename)
+        if isinstance(key, basestring) and len(key) == 38:
+            print key
+            return 0
+        else:
+            print >> sys.stdout, "Result: %s" % key
+            return 1
+    except IndexError:
+        print >> sys.stderr, "read command needs KEY and FILENAME"
+        return 2
+
+
 def main(argv=None):
     """ Main program: Select and run command"""
     if argv is None:
@@ -325,61 +386,19 @@ def main(argv=None):
             options.password = password
         credfile.close()
     AUTH.init_token(options.email, options.password)
-
     try:
         command = args[1].lower()
     except IndexError:
         arg_parser.error("You have to specify a command. "
                          "Try '--help' for more information")
-    exit_code = 0
-    if command == 'list':
-        if len(args) > 2:
-            exit_code = list_notes(outfile=args[2],
-                                   cachefile=options.cachefile)
-        else:
-            exit_code = list_notes(cachefile=options.cachefile)
-    elif command == 'read':
-        try:
-            key = args[2]
-            filename = args[3]
-            exit_code = read_note(key, filename)
-        except IndexError:
-            arg_parser.error("read command needs KEY and FILENAME")
-    elif command == 'write':
-        try:
-            key = args[2]
-            filename = args[3]
-            exit_code = write_note(key, filename)
-        except IndexError:
-            arg_parser.error("write command needs KEY and FILENAME")
-    elif command == 'search':
-        try:
-            searchterm = args[2]
-            if len(args) > 3:
-                exit_code = search_notes(searchterm, options.results,
-                                         outfile=args[3], ascii=False)
-            else:
-                exit_code = search_notes(searchterm, options.results,
-                                         outfile=None, ascii=True)
-        except IndexError:
-            arg_parser.error("write command needs KEY and FILENAME")
-    elif command == 'new':
-        try:
-            filename = args[2]
-            key = create_note(filename)
-            if isinstance(key, basestring) and len(key) == 38:
-                print key
-                exit_code = 0
-            else:
-                print >> sys.stdout, "Result: %s" % key
-                exit_code = 1
-        except IndexError:
-            arg_parser.error("read command needs KEY and FILENAME")
-    else:
+    cmd_table = { 'list': cmd_list, 'read': cmd_read, 'write': cmd_write,
+                  'search': cmd_search, 'new': cmd_new }
+    try:
+        return cmd_table[command](options, args)
+    except IndexError:
         arg_parser.error("Unknown command: %s.\n" % command +
                          "Try '--help' for more information")
 
-    return exit_code
 
 if __name__ == "__main__":
     sys.exit(main())
