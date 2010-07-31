@@ -16,17 +16,17 @@ delete KEY                    -  delete note with KEY"""
 import sys
 import os
 import codecs
+import time
 import cPickle as pickle
 from optparse import OptionParser
 from optparse import IndentedHelpFormatter
 from urllib import urlopen
 from base64 import b64encode
 try:
-    import simplejson
-    from simplejson.decoder import JSONDecodeError
+    import simplejson as json
 except ImportError:
     print >> sys.stderr, "Please install the simplejson module from " \
-                         "http://code.google.com/p/simplejson/"
+                        "http://code.google.com/p/simplejson/"
     if __name__ == "__main__":
         sys.exit(1)
 
@@ -38,7 +38,7 @@ class SimpleNoteAuthenticator:
         """ Define class fields """
         self.email = ''
         self.token = ''
-        self.token_file = ''
+        self.token_file = None
     def del_token_file(self):
         """ Remove TOKEN_FILE """
         if os.path.isfile(self.token_file):
@@ -48,13 +48,28 @@ class SimpleNoteAuthenticator:
                 print >> sys.stderr, "Could not remove tokenfile: %s" % data[1]
     def init_token(self, email, password):
         """ Set and return an authentification token """
+        file_token = ""
+        if self.token_file is not None and os.path.isfile(self.token_file):
+            token_fh = open(self.token_file)
+            file_token = token_fh.read().strip()
+            self.token = file_token
+            token_fh.close()
+        if ( self.token_file is None or not os.path.isfile(self.token_file)
+        or (int(time.time()) - os.stat(self.token_file)[8]) > 22*3600 ):
+            self._get_token_from_api(email, password)
+        if self.token_file is not None and file_token != self.token:
+            token_fh = open(self.token_file, 'w')
+            token_fh.write(self.token)
+            token_fh.close()
+        self.email = email
+    def _get_token_from_api(self, email, password):
+        """ Get the token from call to API """
         login_url = API_URL + 'login'
         creds = b64encode('email=%s&password=%s' % (email, password))
         login = urlopen(login_url, creds)
         self.token = login.readline().rstrip()
         if self.token == '':
             print >> sys.stderr, "Could not get token"
-        self.email = email
         login.close()
 
 AUTH = SimpleNoteAuthenticator()
@@ -97,19 +112,19 @@ def get_note_list():
     try:
         index = urlopen(index_url)
     except IOError, data:
+        AUTH.del_token_file()
         print >> sys.stderr, \
         "Failed to get list of notes from server:", data[2]
         return None
     try:
-        return simplejson.load(index)
-    except JSONDecodeError:
+        return json.load(index)
+    except ValueError:
         print >> sys.stderr, "Failed to decode index"
         return None
 
 
 def list_notes(outfile=None, cachefile=None, encoding='utf-8'):
     """ print a list of all notes, ordered by recent change """
-
     note_data = {}
     keys_on_server = []
     last_run_date = ""
@@ -130,7 +145,10 @@ def list_notes(outfile=None, cachefile=None, encoding='utf-8'):
         ascii = False
         out = codecs.open(outfile, "w", encoding)
 
-    for note in get_note_list():
+    note_list = get_note_list()
+    if note_list is None:
+        return 1
+    for note in note_list:
         if note['deleted'] is False:
             key = note['key']
             keys_on_server.append(key)
@@ -143,6 +161,7 @@ def list_notes(outfile=None, cachefile=None, encoding='utf-8'):
                     'modify':note['modify'],
                     'title': get_title_line(key, ascii)}
                 except IOError, data:
+                    AUTH.del_token_file()
                     print >> sys.stderr, \
                     "Failed to get note title for key %s : %s" % (data[2], key)
                     continue
@@ -176,6 +195,7 @@ def search_notes(searchterm, results=10, outfile=None, ascii=True,
     try:
         index = urlopen(index_url)
     except IOError, data:
+        AUTH.del_token_file()
         print >> sys.stderr, \
         "Failed to search in notes on server:", data[2]
         return 1
@@ -188,8 +208,8 @@ def search_notes(searchterm, results=10, outfile=None, ascii=True,
         out = codecs.open(outfile, "w", encoding)
 
     try:
-        json_note_list = simplejson.load(index)
-    except JSONDecodeError:
+        json_note_list = json.load(index)
+    except ValueError:
         print >> sys.stderr, \
         "Failed to decode search response. Malformed searchterm?"
         return 1
@@ -218,6 +238,7 @@ def read_note(key, filename, encoding='utf-8'):
     try:
         outfile.write(urlopen(note_url).read().decode('utf-8'))
     except IOError, data:
+        AUTH.del_token_file()
         print >> sys.stderr, \
         "Failed to get note text for key %s : %s" % (data[2], key)
         result = 1
@@ -235,6 +256,7 @@ def write_note(key, filename, encoding='utf-8'):
         result = urlopen( note_url,
                             b64encode(infile.read().decode("utf-8")) ).read()
     except IOError, data:
+        AUTH.del_token_file()
         print >> sys.stderr, \
         "Failed to set note text for key %s : %s" % (data[2], key)
     infile.close()
@@ -250,6 +272,7 @@ def create_note(filename, encoding='utf-8'):
         result = urlopen( note_url,
                           b64encode(infile.read().decode("utf-8")) ).read()
     except IOError, data:
+        AUTH.del_token_file()
         print >> sys.stderr, \
         "Failed to create note text for key %s : %s" % (data[2])
         result = ""
@@ -310,6 +333,9 @@ def setup_arg_parser():
         '--cachefile', action='store', dest='cachefile',
         help="File in which to cache information about notes. "
              "Using a cachefile can dramatically speed up listing notes.")
+    arg_parser.add_option(
+        '--tokenfile', action='store', dest='tokenfile',
+        help="File in which to cache the authentication token")
     arg_parser.add_option(
         '--results', action='store', dest='results', type="int", default=10,
         help="Maximum number of results to be returned in a search")
@@ -415,6 +441,7 @@ def main(argv=None):
             password = credfile.readline().strip()
             options.password = password
         credfile.close()
+    AUTH.token_file = options.tokenfile
     AUTH.init_token(options.email, options.password)
     try:
         command = args[1].lower()
