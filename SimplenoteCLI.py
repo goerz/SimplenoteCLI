@@ -106,7 +106,7 @@ def get_title_line(key, ascii=True):
     return title
 
 
-def get_note_list():
+def get_note_list(deleted=False):
     """Get data-structure containing index of all notes """
     index_url = API_URL + 'index?auth=%s&email=%s' % (AUTH.token, AUTH.email)
     try:
@@ -117,7 +117,10 @@ def get_note_list():
         "Failed to get list of notes from server:", data[2]
         return None
     try:
-        return json.load(index)
+        if deleted:
+            return json.load(index)
+        else:
+            return [note for note in json.load(index) if not note['deleted']]
     except ValueError:
         print >> sys.stderr, "Failed to decode index"
         return None
@@ -147,22 +150,21 @@ def list_notes(outfile=None, cachefile=None, encoding='utf-8'):
     if note_list is None:
         return 1
     for note in note_list:
-        if note['deleted'] is False:
-            key = note['key']
-            keys_on_server.append(key)
-            if note['modify'] > most_recent_note_date:
-                most_recent_note_date = note['modify']
-            if ( note['modify'] >= last_run_date
-            or key not in note_data.keys() ):
-                try:
-                    note_data[key] = {
-                    'modify':note['modify'],
-                    'title': get_title_line(key, ascii)}
-                except IOError, data:
-                    AUTH.del_token_file()
-                    print >> sys.stderr, \
-                    "Failed to get note title for key %s : %s" % (data[2], key)
-                    continue
+        key = note['key']
+        keys_on_server.append(key)
+        if note['modify'] > most_recent_note_date:
+            most_recent_note_date = note['modify']
+        if ( note['modify'] >= last_run_date
+        or key not in note_data.keys() ):
+            try:
+                note_data[key] = {
+                'modify':note['modify'],
+                'title': get_title_line(key, ascii)}
+            except IOError, data:
+                AUTH.del_token_file()
+                print >> sys.stderr, \
+                "Failed to get note title for key %s : %s" % (data[2], key)
+                continue
     keys_list = note_data.keys()
     keys_list.sort(key=lambda k: note_data[k]['modify'], reverse=True)
 
