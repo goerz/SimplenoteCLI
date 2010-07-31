@@ -129,8 +129,6 @@ def list_notes(outfile=None, cachefile=None, encoding='utf-8'):
     keys_on_server = []
     last_run_date = ""
     most_recent_note_date = ""
-    if cachefile is not None and cachefile.startswith('~'):
-        cachefile = cachefile.replace('~', os.environ['HOME'], 1)
     if cachefile is not None and os.path.isfile(str(cachefile)):
         picklefh = open(cachefile, 'r')
         note_data = pickle.load(picklefh)
@@ -432,6 +430,18 @@ def main(argv=None):
         argv = sys.argv
     arg_parser = setup_arg_parser()
     options, args = arg_parser.parse_args(argv)
+    if (options.cachefile is not None 
+    and options.cachefile.startswith('~')):
+        options.cachefile \
+        = options.cachefile.replace('~', os.environ['HOME'], 1)
+    if (options.tokenfile is not None 
+    and options.tokenfile.startswith('~')):
+        options.tokenfile \
+        = options.tokenfile.replace('~', os.environ['HOME'], 1)
+    if (options.credfile is not None 
+    and options.credfile.startswith('~')):
+        options.credfile \
+        = options.credfile.replace('~', os.environ['HOME'], 1)
     if os.path.isfile(options.credfile):
         credfile = open(options.credfile)
         if options.email is None:
