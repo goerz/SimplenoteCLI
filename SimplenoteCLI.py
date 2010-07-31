@@ -470,4 +470,10 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except IOError, error_data:
+        if error_data[0] == 'socket error':
+            print >> sys.stderr, "Cannot connect to server: " + error_data[1][1]
+        else:
+            raise
